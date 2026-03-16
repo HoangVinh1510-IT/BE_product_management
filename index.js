@@ -16,7 +16,6 @@ const flash = require("express-flash");
 database.connect();
 
 const app = express();
-const port = process.env.PORT || 3000;
 
 app.use(methodOverride("_method"));
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -24,7 +23,6 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.set("views", `${__dirname}/views`);
 app.set("view engine", "pug");
 
-// flash
 app.use(cookieParser("ABCVSHSGY"));
 
 app.use(
@@ -32,23 +30,16 @@ app.use(
     secret: "secret-key",
     resave: false,
     saveUninitialized: true,
-    cookie: { maxAge: 60000 }
   })
 );
 
 app.use(flash());
 
-// biến global cho pug
 app.locals.prefixAdmin = systemConfig.prefixAdmin;
 
-// static
 app.use(express.static(`${__dirname}/public`));
 
-// routes
 routeAdmin(app);
 route(app);
 
-// start server
-app.listen(port, () => {
-  console.log(`App listening on port ${port}`);
-});
+module.exports = app;
