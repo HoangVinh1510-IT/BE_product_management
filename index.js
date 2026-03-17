@@ -13,10 +13,9 @@ const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const flash = require("express-flash");
 
-database.connect();
-
 const app = express();
 
+// 🔥 MIDDLEWARE
 app.use(methodOverride("_method"));
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -39,7 +38,19 @@ app.locals.prefixAdmin = systemConfig.prefixAdmin;
 
 app.use(express.static(`${__dirname}/public`));
 
+// 🔥 ROUTES
 routeAdmin(app);
 route(app);
 
-module.exports = app;
+// 🔥 START SERVER (QUAN TRỌNG NHẤT)
+const startServer = async () => {
+  await database.connect();
+
+  const PORT = process.env.PORT || 3000;
+
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  });
+};
+
+startServer();
