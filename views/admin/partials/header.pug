@@ -1,8 +1,14 @@
-header.header
+header.header.bg-dark.text-white.py-2
     .container-fluid
         .row.align-items-center
-            .col-3
-                .inner-logo
-                    a(href="/admin/dashboard") ADMIN
-                        
-            .col-9
+
+            // 🔥 LOGO + AVATAR
+            .col-6.d-flex.align-items-center
+                a(href="/admin/dashboard" class="d-flex align-items-center text-decoration-none text-white")
+                    img(
+                        src="/images/avatar.jpg"
+                        alt="Avatar"
+                        style="height:40px; width:40px; object-fit:cover; border-radius:50%; margin-right:10px;"
+                        onerror="this.src='https://via.placeholder.com/40'"
+                    )
+                    span.fw-bold ADMIN PANEL
