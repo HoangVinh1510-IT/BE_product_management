@@ -17,7 +17,8 @@ const app = express();
 
 // 🔥 MIDDLEWARE
 app.use(methodOverride("_method"));
-app.use(bodyParser.urlencoded({ extended: false }));
+// app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
 
 app.set("views", `${__dirname}/views`);
 app.set("view engine", "pug");
@@ -52,5 +53,10 @@ const startServer = async () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
   });
 };
+// Thêm vào cuối index.js, trước startServer()
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Rejection at:", promise);
+  console.error("🔥 Reason:", reason);
+});
 
 startServer();

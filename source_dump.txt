@@ -22,6 +22,9 @@ product-management/
 │   ├── pagination.js
 │   ├── search.js
 │   └── storageMulter.js
+├── middlewares/
+│   └── admin/
+│       └── uploadCloud.middlewre.js
 ├── models/
 │   └── product.model.js
 ├── node_modules/
@@ -41,7 +44,8 @@ product-management/
 │   ├── js/
 │   │   └── script.js
 │   └── uploads/
-│       └── 1773406296391-$Ơ{file.originalname}
+│       ├── 1773406296391-$Ơ{file.originalname}
+│       └── 1773743945629-$Ơ{file.originalname}
 ├── routes/
 │   ├── admin/
 │   │   ├── dashboard.router.js
@@ -118,12 +122,12 @@ const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const flash = require("express-flash");
 
-database.connect();
-
 const app = express();
 
+// 🔥 MIDDLEWARE
 app.use(methodOverride("_method"));
-app.use(bodyParser.urlencoded({ extended: false }));
+// app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
 
 app.set("views", `${__dirname}/views`);
 app.set("view engine", "pug");
@@ -144,27 +148,36 @@ app.locals.prefixAdmin = systemConfig.prefixAdmin;
 
 app.use(express.static(`${__dirname}/public`));
 
+// 🔥 ROUTES
 routeAdmin(app);
 route(app);
 
+// 🔥 START SERVER (QUAN TRỌNG NHẤT)
+const startServer = async () => {
+  await database.connect();
 
-module.exports = app;
+  const PORT = process.env.PORT || 3000;
+
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  });
+};
+
+startServer();
 ```
 
 ### config\database.js
 ```js
 const mongoose = require("mongoose");
 
-module.exports.connect = async () =>{
-    try {
-        await mongoose.connect(process.env.MONGO_URL);
-        console.log("Connect Success!");
-    } catch (error) {
-        console.log("Connect Error!");
-        
-    }
-}
-
+module.exports.connect = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URL);
+    console.log("Connect Success!");
+  } catch (error) {
+    console.log("DB ERROR:", error);
+  }
+};
 ```
 
 ### config\system.js
@@ -366,9 +379,9 @@ module.exports.createPost = async (req, res) => {
     req.body.position = parseInt(req.body.position);
   }
 
-  if(req.file) {
-    req.body.thumbnail = `/uploads/${req.file.filename}`;
-  }
+  // if(req.file) {
+  //   req.body.thumbnail = `/uploads/${req.file.filename}`;
+  // }
 
   const product = new Product(req.body);
   await product.save();
@@ -595,6 +608,19 @@ module.exports = () => {
   return storage;
 };
 
+```
+
+### middlewares\admin\uploadCloud.middlewre.js
+```js
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
+
+// ================= CLOUDINARY CONFIG =================
+cloudinary.config({
+  cloud_name: "depj54dmc",
+  api_key: "632972859475624",
+  api_secret: "N1AlhsQUAnKsJmdCnnbk8XQU1K0",
+});
 ```
 
 ### models\product.model.js
@@ -904,30 +930,106 @@ module.exports = (app) =>{
 ```js
 const express = require("express");
 const multer = require("multer");
-const storageMulter = require("../../helpers/storageMulter");
-const upload = multer({ storage: storageMulter() });
+
+
 const router = express.Router();
 
 const controller = require("../../controllers/admin/product.controller");
-const validate = require("../../validates/admin/product.validate");
 
+
+
+// ================= MULTER CONFIG (QUAN TRỌNG) =================
+const storage = multer.memoryStorage();
+
+const upload = multer({
+  storage: storage,
+});
+
+// ================= HELPER UPLOAD =================
+const uploadToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: "products" }, // lưu vào folder cho đẹp
+      (error, result) => {
+        if (result) resolve(result);
+        else reject(error);
+      }
+    );
+
+    streamifier.createReadStream(fileBuffer).pipe(stream);
+  });
+};
+
+// ================= ROUTES =================
+
+// LIST
 router.get("/", controller.index);
+
+// CHANGE STATUS
 router.patch("/change-status/:status/:id", controller.changeStatus);
 router.patch("/change-multi", controller.changeMulti);
 
+// DELETE
 router.delete("/delete/:id", controller.deleteItem);
 
+// ================= CREATE =================
+
+// FORM
 router.get("/create", controller.create);
-router.post("/create", upload.single('thumbnail'),validate.createPost, controller.createPost);
 
+// SUBMIT
+router.post("/create", upload.single("thumbnail"), async (req, res, next) => {
+  if(req.file){
+    let streamUpload = (req) =>{
+      return new Promise((resolve, reject)=>{
+        let stream = cloudinary.uploader.upload_stream(
+          (error, result) => {
+            if(result) resolve(result);
+            else reject(error);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(stream);
+      })
+    };
+    async function upload(req){
+      let result = await streamUpload(req);
+      console.log(result.secure_url);
+      console.log(req.file);
+      req.body[req.file.fieldname] = result.secure_url;
+      next();
+    }
+    upload(req);
+  }else{
+    next();
+  }
+});
+
+// ================= EDIT =================
+
+// FORM
 router.get("/edit/:id", controller.edit);
-router.patch("/edit/:id", upload.single('thumbnail'), controller.editPatch);
 
+// SUBMIT
+router.patch("/edit/:id", upload.single("thumbnail"), async (req, res, next) => {
+  try {
+    console.log("🔥 FILE EDIT:", req.file);
+
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer);
+      req.body.thumbnail = result.secure_url;
+    }
+
+    return controller.editPatch(req, res, next);
+  } catch (error) {
+    console.log("❌ Upload Error:", error);
+    return res.redirect("back");
+  }
+});
+
+// ================= DETAIL =================
 router.get("/detail/:id", controller.detail);
 
-
 module.exports = router;
-
 ```
 
 ### routes\client\home.route.js

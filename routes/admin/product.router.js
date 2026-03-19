@@ -1,25 +1,40 @@
 const express = require("express");
 const multer = require("multer");
-const storageMulter = require("../../helpers/storageMulter");
-const upload = multer({ storage: storageMulter() });
+
 const router = express.Router();
-
 const controller = require("../../controllers/admin/product.controller");
-const validate = require("../../validates/admin/product.validate");
+const uploadCloud = require("../../middlewares/admin/uploadCloud.middleware"); // ✅ sửa tên file
 
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// LIST
 router.get("/", controller.index);
+
+// CHANGE STATUS
 router.patch("/change-status/:status/:id", controller.changeStatus);
 router.patch("/change-multi", controller.changeMulti);
 
+// DELETE
 router.delete("/delete/:id", controller.deleteItem);
 
+// CREATE
 router.get("/create", controller.create);
-router.post("/create", upload.single('thumbnail'),validate.createPost, controller.createPost);
+router.post("/create",
+  upload.single("thumbnail"),
+  uploadCloud.upload,        // ✅ upload lên cloudinary
+  controller.createPost      // ✅ lưu vào DB
+);
 
+// EDIT
 router.get("/edit/:id", controller.edit);
-router.patch("/edit/:id", upload.single('thumbnail'), controller.editPatch);
+router.patch("/edit/:id",
+  upload.single("thumbnail"),
+  uploadCloud.upload,        // ✅ thêm upload cloudinary cho edit
+  controller.editPatch
+);
 
+// DETAIL
 router.get("/detail/:id", controller.detail);
-
 
 module.exports = router;
