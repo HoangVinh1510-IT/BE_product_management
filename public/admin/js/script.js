@@ -177,3 +177,40 @@ if(uploadImage){
 
 // end  upload image
 
+//sort
+const sort = document.querySelector("[sort]");
+if(sort){
+    let url = new URL(window.location.href);
+
+    const sortSelect = sort.querySelector("[sort-select]");
+    const sortClear = sort.querySelector("[sort-clear]");
+// Xử lý sự kiện khi chọn một tùy chọn sắp xếp
+    sortSelect.addEventListener("change",(e)=>{
+        const value = e.target.value;
+        const [sortKey, sortValue] = value.split("-");
+
+        console.log(sortKey);
+        console.log(sortValue);
+
+        url.searchParams.set("sortKey", sortKey);
+        url.searchParams.set("sortValue", sortValue);
+        window.location.href = url.href;
+    });
+    // Xử lý sự kiện khi nhấn nút Clear sắp xếp
+    sortClear.addEventListener("click",()=>{
+        url.searchParams.delete("sortKey");
+        url.searchParams.delete("sortValue");
+        window.location.href = url.href;
+    });
+//thêm select cho sort
+    const sortKey = url.searchParams.get("sortKey");
+    const sortValue = url.searchParams.get("sortValue");
+
+    if(sortKey && sortValue){
+        const value = `${sortKey}-${sortValue}`;
+        sortSelect.value = value;
+        const optionSelected = sortSelect.querySelector(`option[value="${value}"]`);
+        optionSelected.selected = true;
+    }
+}
+//end sort

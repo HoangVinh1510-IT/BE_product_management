@@ -29,8 +29,18 @@ module.exports.index = async (req, res) => {
     countProducts
   );
 
+  
+  // ✅ Sort nằm TRONG function
+  let sort = {};
+  if (req.query.sortKey && req.query.sortValue) {
+    sort[req.query.sortKey] = req.query.sortValue;
+  } else {
+    sort.position = "desc";
+  }
+
+  
   const products = await Product.find(find)
-    .sort({ position: "desc" })
+    .sort(sort)  // ✅ dùng sort động
     .limit(objectPagination.limitItems)
     .skip(objectPagination.skip);
 
@@ -164,9 +174,6 @@ module.exports.editPatch = async (req, res) => {
   req.body.discountPercentage = parseInt(req.body.discount);
   req.body.stock = parseInt(req.body.stock);
   delete req.body.discount;
-
-  // ✅ Không cần set thumbnail ở đây
-  // uploadCloud.upload middleware đã tự set req.body.thumbnail = cloudinary URL rồi
 
   try {
     await Product.updateOne({ _id: id }, req.body);
