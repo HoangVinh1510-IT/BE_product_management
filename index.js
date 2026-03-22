@@ -5,6 +5,8 @@ require("dotenv").config();
 const database = require("./config/database");
 const systemConfig = require("./config/system");
 
+const path = require("path");
+
 const routeAdmin = require("./routes/admin/index.router");
 const route = require("./routes/client/index.route");
 
@@ -34,6 +36,10 @@ app.use(
 );
 
 app.use(flash());
+
+//tinyMCE
+app.use("/tinymce", express.static(`${__dirname}/node_modules/tinymce`));
+//end tinyMCE
 
 app.locals.prefixAdmin = systemConfig.prefixAdmin;
 

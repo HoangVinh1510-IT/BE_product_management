@@ -1,6 +1,6 @@
 # ==================================================
 # Path: E:\Hoc_FullStack\BE_NodeJS\product-management
-# Detected tech: javascript, typescript
+# Detected tech: javascript, php, typescript
 # ==================================================
 
 ## DIRECTORY STRUCTURE
@@ -13,6 +13,7 @@ product-management/
 ├── controllers/
 │   ├── admin/
 │   │   ├── dashboard.controller.js
+│   │   ├── product-category.controller.js
 │   │   └── product.controller.js
 │   └── client/
 │       ├── home.controller.js
@@ -24,7 +25,7 @@ product-management/
 │   └── storageMulter.js
 ├── middlewares/
 │   └── admin/
-│       └── uploadCloud.middlewre.js
+│       └── uploadCloud.middleware.js
 ├── models/
 │   └── product.model.js
 ├── node_modules/
@@ -34,7 +35,8 @@ product-management/
 │   │   │   └── style.css
 │   │   └── js/
 │   │       ├── product.js
-│   │       └── script.js
+│   │       ├── script.js
+│   │       └── tinymce-config.js
 │   ├── css/
 │   │   └── style.css
 │   ├── images/
@@ -50,6 +52,7 @@ product-management/
 │   ├── admin/
 │   │   ├── dashboard.router.js
 │   │   ├── index.router.js
+│   │   ├── product-category.router.js
 │   │   └── product.router.js
 │   └── client/
 │       ├── home.route.js
@@ -67,9 +70,13 @@ product-management/
 │   │   │   ├── filter-status.pug
 │   │   │   ├── form-change-multi.pug
 │   │   │   ├── pagination.pug
-│   │   │   └── search.pug
+│   │   │   ├── search.pug
+│   │   │   └── sort.pug
 │   │   ├── pages/
 │   │   │   ├── dashboard/
+│   │   │   │   └── index.pug
+│   │   │   ├── product-category/
+│   │   │   │   ├── create.pug
 │   │   │   │   └── index.pug
 │   │   │   └── products/
 │   │   │       ├── create.pug
@@ -114,6 +121,8 @@ require("dotenv").config();
 const database = require("./config/database");
 const systemConfig = require("./config/system");
 
+const path = require("path");
+
 const routeAdmin = require("./routes/admin/index.router");
 const route = require("./routes/client/index.route");
 
@@ -144,6 +153,10 @@ app.use(
 
 app.use(flash());
 
+//tinyMCE
+app.use("/tinymce", express.static(`${__dirname}/node_modules/tinymce`));
+//end tinyMCE
+
 app.locals.prefixAdmin = systemConfig.prefixAdmin;
 
 app.use(express.static(`${__dirname}/public`));
@@ -162,6 +175,11 @@ const startServer = async () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
   });
 };
+// Thêm vào cuối index.js, trước startServer()
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Rejection at:", promise);
+  console.error("🔥 Reason:", reason);
+});
 
 startServer();
 ```
@@ -203,23 +221,33 @@ module.exports = {
     
 ```
 
+### controllers\admin\product-category.controller.js
+```js
+//[GET] /admin/product-category
+module.exports.index = async (req, res) => {
+  res.render("admin/pages/product-category/index", {
+    pageTitle: "Danh sách danh mục sản phẩm",
+  });
+};
+
+//[GET] /admin/product-category/create
+module.exports.create = async (req, res) => {
+  res.render("admin/pages/product-category/create", {
+    pageTitle: "Tạo danh mục sản phẩm",
+  });
+};
+```
+
 ### controllers\admin\product.controller.js
 ```js
 const Product = require("../../models/product.model");
-
 const systemConfig = require("../../config/system");
-
-const methodOverride = require("method-override");
 const filterStatusHelper = require("../../helpers/filterStatus");
 const searchHelper = require("../../helpers/search");
 const paginationHelper = require("../../helpers/pagination");
 
 //[GET] /admin/products
-
 module.exports.index = async (req, res) => {
-  //console.log(req.query.status);
-
-  //đoanj code lọc status
   const filterStatus = filterStatusHelper(req.query);
 
   let find = {
@@ -229,62 +257,60 @@ module.exports.index = async (req, res) => {
   if (req.query.status) {
     find.status = req.query.status;
   }
-  //srearch
-  const objectSearch = searchHelper(req.query);
 
+  const objectSearch = searchHelper(req.query);
   if (objectSearch.regex) {
     find.title = objectSearch.regex;
   }
-  //end search
 
-  //pagination
   const countProducts = await Product.countDocuments(find);
 
   let objectPagination = paginationHelper(
-    {
-      currentPage: 1,
-      limitItems: 4,
-    },
+    { currentPage: 1, limitItems: 4 },
     req.query,
     countProducts
   );
 
-  //end pagination
+  
+  // ✅ Sort nằm TRONG function
+  let sort = {};
+  if (req.query.sortKey && req.query.sortValue) {
+    sort[req.query.sortKey] = req.query.sortValue;
+  } else {
+    sort.position = "desc";
+  }
+
+  
   const products = await Product.find(find)
-    .sort({ position:"desc"})
+    .sort(sort)  // ✅ dùng sort động
     .limit(objectPagination.limitItems)
     .skip(objectPagination.skip);
 
-    
   res.render("admin/pages/products/index", {
-  pageTitle: "Danh sách sản phẩm",
-  products: products,
-  filterStatus: filterStatus,
-  keyword: objectSearch.keyword,
-  pagination: objectPagination,
-  messages: {
-    success: req.flash("success"),
-    error: req.flash("error")
-  }
-});
+    pageTitle: "Danh sách sản phẩm",
+    products: products,
+    filterStatus: filterStatus,
+    keyword: objectSearch.keyword,
+    pagination: objectPagination,
+    messages: {
+      success: req.flash("success"),
+      error: req.flash("error"),
+    },
+  });
 };
 
 //[PATCH] /admin/products/change-status/:status/:id
-
 module.exports.changeStatus = async (req, res) => {
   const status = req.params.status;
   const id = req.params.id;
   const back = req.query.back;
 
   await Product.updateOne({ _id: id }, { status: status });
-
   req.flash("success", "Cập nhật trạng thái thành công!");
-
   res.redirect(back || "/admin/products");
 };
 
 //[PATCH] /admin/products/change-multi
-
 module.exports.changeMulti = async (req, res) => {
   const type = req.body.type;
   const ids = req.body.ids.split(",");
@@ -293,8 +319,7 @@ module.exports.changeMulti = async (req, res) => {
   switch (type) {
     case "active":
       await Product.updateMany({ _id: { $in: ids } }, { status: "active" });
-    req.flash("success", `Cập nhật trạng thái thành công ${ids.length} sản phẩm!`);
-      
+      req.flash("success", `Cập nhật trạng thái thành công ${ids.length} sản phẩm!`);
       break;
     case "inactive":
       await Product.updateMany({ _id: { $in: ids } }, { status: "inactive" });
@@ -303,10 +328,7 @@ module.exports.changeMulti = async (req, res) => {
     case "delete-all":
       await Product.updateMany(
         { _id: { $in: ids } },
-        {
-          deleted: true,
-          deletedAt: new Date(),
-        }
+        { deleted: true, deletedAt: new Date() }
       );
       break;
     case "change-position":
@@ -315,10 +337,6 @@ module.exports.changeMulti = async (req, res) => {
         position = parseInt(position);
         await Product.updateOne({ _id: id }, { position: position });
       }
-      // await Product.updateMany({_id: {$in: ids}},{
-      //     deleted : true,
-      //     deletedAt: new Date()
-      // });
       break;
     default:
       break;
@@ -326,62 +344,42 @@ module.exports.changeMulti = async (req, res) => {
   res.redirect(back || "/admin/products");
 };
 
-//[DELETE] /admin/products/delete/:id
-//XÓA VĨNH VIỄN
-//     module.exports.deleteItem = async (req, res) => {
-//     const id  = req.params.id;
-//     const back = req.query.back;
-
-//     await Product.deleteOne({_id: id});
-//     res.redirect(back || "/admin/products");
-// };
-
-//[DELETE] /admin/products/delete/:id XÓA MỀM
+//[DELETE] /admin/products/delete/:id (XÓA MỀM)
 module.exports.deleteItem = async (req, res) => {
   const id = req.params.id;
   const back = req.query.back;
 
   await Product.updateOne(
     { _id: id },
-    {
-      deleted: true,
-      deletedAt: new Date(),
-    }
+    { deleted: true, deletedAt: new Date() }
   );
   res.redirect(back || "/admin/products");
 };
 
-
 //[GET] /admin/products/create
-
 module.exports.create = async (req, res) => {
   res.render("admin/pages/products/create", {
     pageTitle: "Thêm mới sản phẩm",
     messages: {
       success: req.flash("success"),
-      error: req.flash("error")
-    }
+      error: req.flash("error"),
+    },
   });
 };
+
 //[POST] /admin/products/create
 module.exports.createPost = async (req, res) => {
-
   req.body.price = parseInt(req.body.price);
   req.body.discountPercentage = parseInt(req.body.discount);
   req.body.stock = parseInt(req.body.stock);
-
   delete req.body.discount;
 
-  if(req.body.position == ""){
+  if (req.body.position == "") {
     const countProducts = await Product.countDocuments();
     req.body.position = countProducts + 1;
-  }else{
+  } else {
     req.body.position = parseInt(req.body.position);
   }
-
-  // if(req.file) {
-  //   req.body.thumbnail = `/uploads/${req.file.filename}`;
-  // }
 
   const product = new Product(req.body);
   await product.save();
@@ -392,67 +390,62 @@ module.exports.createPost = async (req, res) => {
 //[GET] /admin/products/edit/:id
 module.exports.edit = async (req, res) => {
   try {
-    const find ={
+    const find = {
       deleted: false,
-      _id: req.params.id
-    }
+      _id: req.params.id,
+    };
     const product = await Product.findOne(find);
 
     res.render("admin/pages/products/edit", {
-    pageTitle: "Chỉnh sửa sản phẩm",
-    product: product,
-    messages: {
-    success: req.flash("success"),
-    error: req.flash("error")
-  }
-});
+      pageTitle: "Chỉnh sửa sản phẩm",
+      product: product,
+      messages: {
+        success: req.flash("success"),
+        error: req.flash("error"),
+      },
+    });
   } catch (error) {
     res.redirect(`${systemConfig.prefixAdmin}/products`);
   }
-
 };
+
 //[PATCH] /admin/products/edit/:id
 module.exports.editPatch = async (req, res) => {
   const id = req.params.id;
   req.body.price = parseInt(req.body.price);
   req.body.discountPercentage = parseInt(req.body.discount);
   req.body.stock = parseInt(req.body.stock);
+  delete req.body.discount;
 
-  if(req.file){
-    req.body.thumbnail = `/uploads/${req.file.filename}`;
+  try {
+    await Product.updateOne({ _id: id }, req.body);
+    req.flash("success", "Cập nhật sản phẩm thành công!");
+  } catch (error) {
+    req.flash("error", "Có lỗi xảy ra khi cập nhật sản phẩm!");
   }
-try {
-  await Product.updateOne({_id: id,}, req.body);
-  req.flash("success", "Cập nhật sản phẩm thành công!");
-
-} catch (error) {
-  req.flash("error", "Có lỗi xảy ra khi cập nhật sản phẩm!");
-}
   res.redirect("back");
 };
 
-/*[GET] /admin/products/detail/:id*/
+//[GET] /admin/products/detail/:id
 module.exports.detail = async (req, res) => {
   try {
-    const find ={
+    const find = {
       deleted: false,
-      _id: req.params.id
-    }
+      _id: req.params.id,
+    };
     const product = await Product.findOne(find);
 
-    console.log(product);
     res.render("admin/pages/products/detail", {
-    pageTitle: product.title,
-    product: product,
-    messages: {
-    success: req.flash("success"),
-    error: req.flash("error")
-  }
-});
+      pageTitle: product.title,
+      product: product,
+      messages: {
+        success: req.flash("success"),
+        error: req.flash("error"),
+      },
+    });
   } catch (error) {
     res.redirect(`${systemConfig.prefixAdmin}/products`);
   }
-
 };
 ```
 
@@ -610,17 +603,49 @@ module.exports = () => {
 
 ```
 
-### middlewares\admin\uploadCloud.middlewre.js
+### middlewares\admin\uploadCloud.middleware.js
 ```js
 const cloudinary = require("cloudinary").v2;
 const streamifier = require("streamifier");
 
-// ================= CLOUDINARY CONFIG =================
 cloudinary.config({
-  cloud_name: "depj54dmc",
-  api_key: "632972859475624",
-  api_secret: "N1AlhsQUAnKsJmdCnnbk8XQU1K0",
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.API_KEY,
+  api_secret: process.env.API_SECRET,
 });
+
+module.exports.upload = (req, res, next) => {
+  if (req.file) {
+    let streamUpload = (req) => {
+      return new Promise((resolve, reject) => {
+        let stream = cloudinary.uploader.upload_stream(
+          { folder: "products" },
+          (error, result) => {
+            if (result) resolve(result);
+            else reject(error);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(stream);
+      });
+    };
+
+    // ✅ Thêm try/catch để bắt lỗi
+    async function upload(req) {
+      try {
+        let result = await streamUpload(req);
+        req.body[req.file.fieldname] = result.secure_url;
+        next();
+      } catch (error) {
+        console.error("❌ Cloudinary upload error:", error);
+        next(error); // ✅ chuyển lỗi sang Express error handler
+      }
+    }
+
+    upload(req);
+  } else {
+    next();
+  }
+};
 ```
 
 ### models\product.model.js
@@ -890,7 +915,54 @@ if(uploadImage){
 
 // end  upload image
 
+//sort
+const sort = document.querySelector("[sort]");
+if(sort){
+    let url = new URL(window.location.href);
 
+    const sortSelect = sort.querySelector("[sort-select]");
+    const sortClear = sort.querySelector("[sort-clear]");
+// Xử lý sự kiện khi chọn một tùy chọn sắp xếp
+    sortSelect.addEventListener("change",(e)=>{
+        const value = e.target.value;
+        const [sortKey, sortValue] = value.split("-");
+
+        console.log(sortKey);
+        console.log(sortValue);
+
+        url.searchParams.set("sortKey", sortKey);
+        url.searchParams.set("sortValue", sortValue);
+        window.location.href = url.href;
+    });
+    // Xử lý sự kiện khi nhấn nút Clear sắp xếp
+    sortClear.addEventListener("click",()=>{
+        url.searchParams.delete("sortKey");
+        url.searchParams.delete("sortValue");
+        window.location.href = url.href;
+    });
+//thêm select cho sort
+    const sortKey = url.searchParams.get("sortKey");
+    const sortValue = url.searchParams.get("sortValue");
+
+    if(sortKey && sortValue){
+        const value = `${sortKey}-${sortValue}`;
+        sortSelect.value = value;
+        const optionSelected = sortSelect.querySelector(`option[value="${value}"]`);
+        optionSelected.selected = true;
+    }
+}
+//end sort
+```
+
+### public\admin\js\tinymce-config.js
+```js
+tinymce.init({
+  selector: ".textarea-mce",
+  license_key: "gpl",  // ✅ thêm dòng này để tắt cảnh báo
+  plugins: "lists link image",
+  toolbar: "undo redo | bold italic | alignleft aligncenter alignright | bullist numlist"
+
+});
 ```
 
 ### public\js\script.js
@@ -915,6 +987,7 @@ const systemConfig = require("../../config/system");
 
 const dashboardRoutes = require("./dashboard.router");
 const productdRoutes = require("./product.router");
+const productdCategoryRoutes = require("./product-category.router");
 
 module.exports = (app) =>{
     
@@ -922,8 +995,24 @@ module.exports = (app) =>{
     
     app.use(PATH_ADMIN + "/dashboard", dashboardRoutes);
     app.use(PATH_ADMIN + "/products", productdRoutes);
+    app.use(PATH_ADMIN + "/product-category", productdCategoryRoutes);
 
 }
+```
+
+### routes\admin\product-category.router.js
+```js
+const express = require("express");
+const router = express.Router();
+const controller = require("../../controllers/admin/product-category.controller");
+
+// LIST
+router.get("/", controller.index);
+
+router.get("/create", controller.create);
+
+
+module.exports = router;
 ```
 
 ### routes\admin\product.router.js
@@ -931,36 +1020,12 @@ module.exports = (app) =>{
 const express = require("express");
 const multer = require("multer");
 
-
 const router = express.Router();
-
 const controller = require("../../controllers/admin/product.controller");
+const uploadCloud = require("../../middlewares/admin/uploadCloud.middleware");
 
-
-
-// ================= MULTER CONFIG (QUAN TRỌNG) =================
 const storage = multer.memoryStorage();
-
-const upload = multer({
-  storage: storage,
-});
-
-// ================= HELPER UPLOAD =================
-const uploadToCloudinary = (fileBuffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder: "products" }, // lưu vào folder cho đẹp
-      (error, result) => {
-        if (result) resolve(result);
-        else reject(error);
-      }
-    );
-
-    streamifier.createReadStream(fileBuffer).pipe(stream);
-  });
-};
-
-// ================= ROUTES =================
+const upload = multer({ storage });
 
 // LIST
 router.get("/", controller.index);
@@ -972,61 +1037,23 @@ router.patch("/change-multi", controller.changeMulti);
 // DELETE
 router.delete("/delete/:id", controller.deleteItem);
 
-// ================= CREATE =================
-
-// FORM
+// CREATE
 router.get("/create", controller.create);
+router.post("/create",
+  upload.single("thumbnail"),
+  uploadCloud.upload,
+  controller.createPost
+);
 
-// SUBMIT
-router.post("/create", upload.single("thumbnail"), async (req, res, next) => {
-  if(req.file){
-    let streamUpload = (req) =>{
-      return new Promise((resolve, reject)=>{
-        let stream = cloudinary.uploader.upload_stream(
-          (error, result) => {
-            if(result) resolve(result);
-            else reject(error);
-          }
-        );
-        streamifier.createReadStream(req.file.buffer).pipe(stream);
-      })
-    };
-    async function upload(req){
-      let result = await streamUpload(req);
-      console.log(result.secure_url);
-      console.log(req.file);
-      req.body[req.file.fieldname] = result.secure_url;
-      next();
-    }
-    upload(req);
-  }else{
-    next();
-  }
-});
-
-// ================= EDIT =================
-
-// FORM
+// EDIT
 router.get("/edit/:id", controller.edit);
+router.patch("/edit/:id",
+  upload.single("thumbnail"),
+  uploadCloud.upload,
+  controller.editPatch  // ✅ bỏ validate.createPost
+);
 
-// SUBMIT
-router.patch("/edit/:id", upload.single("thumbnail"), async (req, res, next) => {
-  try {
-    console.log("🔥 FILE EDIT:", req.file);
-
-    if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer);
-      req.body.thumbnail = result.secure_url;
-    }
-
-    return controller.editPatch(req, res, next);
-  } catch (error) {
-    console.log("❌ Upload Error:", error);
-    return res.redirect("back");
-  }
-});
-
-// ================= DETAIL =================
+// DETAIL
 router.get("/detail/:id", controller.detail);
 
 module.exports = router;
